@@ -51,6 +51,57 @@ class CNNetWrapper(nn.Module):
         return F.softmax(self.forward(x))
 
 class MineralCNNet(nn.Module):
+    def __init__(self, img_dim = 224, cdim = 3, k_sizes: tuple[int] = (4, 4), p_sizes: tuple[int] = (8, 8), drop_rate: float = 0.15, num_classes = 10):
+            super(MineralCNNet, self).__init__()
+
+            conv2fc_dim = img_dim
+
+            for k, p in zip(k_sizes, p_sizes):
+                conv2fc_dim -= k - 1
+                conv2fc_dim = int(conv2fc_dim / p)
+
+            conv2fc_dim = (conv2fc_dim ** 2) * 64
+
+            #conv2fc_dim = ((img_dim - sum(k_sizes) + len(k_sizes)) ** 2) * 96
+
+            self.conv = nn.Sequential(
+                nn.Conv2d(in_channels=cdim, out_channels=32, kernel_size=k_sizes[0]),
+                nn.MaxPool2d(p_sizes[0]),
+                nn.BatchNorm2d(32),
+                nn.ReLU(),
+                nn.Dropout(drop_rate),
+                nn.Conv2d(in_channels=32, out_channels=64, kernel_size=k_sizes[1]),
+                nn.MaxPool2d(p_sizes[1]),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+                nn.Dropout(drop_rate)
+            )
+
+            self.flatten = nn.Flatten()
+
+            self.fc = nn.Sequential(
+                nn.Linear(in_features=conv2fc_dim, out_features=256),
+                nn.ReLU(),
+                nn.Dropout(drop_rate),
+                nn.Linear(in_features=256, out_features=64),
+                nn.ReLU(),
+                nn.Dropout(drop_rate),
+                nn.Linear(in_features=64, out_features=num_classes)
+            )
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.flatten(x)
+        x = self.fc(x)
+        
+        return x
+        
+    def predict(self, x):
+        return F.softmax(self.forward(x), dim=0)
+
+
+"""
+class MineralCNNet(nn.Module):
     def __init__(self, img_dim = 224, cdim = 3, k_sizes: tuple[int] = (4, 4, 4, 4), p_sizes: tuple[int] = (4, 2, 2, 2), drop_rate: float = 0.15, num_classes = 10):
             super(MineralCNNet, self).__init__()
 
@@ -106,128 +157,6 @@ class MineralCNNet(nn.Module):
         
         return x
         
-    def predict(self, x):
-        return F.softmax(self.forward(x))
-
-
-"""
-class MineralCNNet(nn.Module):
-
-    def __init__(self, img_dim = 224, cdim = 3, k_sizes: tuple[int] = (11, 8, 4, 4, 4), p_sizes: tuple[int] = (2, 2, 2, 2, 2), drop_rate: float = 0.2, num_classes = 10):
-        super(MineralCNNet, self).__init__()
-
-        conv2fc_dim = img_dim
-
-        for k, p in zip(k_sizes, p_sizes):
-            conv2fc_dim -= k - 1
-            conv2fc_dim = math.ceil(conv2fc_dim / p)
-
-        conv2fc_dim = (conv2fc_dim ** 2) * 96
-
-        #conv2fc_dim = ((img_dim - sum(k_sizes) + len(k_sizes)) ** 2) * 96
-
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_channels=cdim, out_channels=32, kernel_size=k_sizes[0]),
-            nn.MaxPool2d(p_sizes[0]),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Dropout(drop_rate),
-            nn.Conv2d(in_channels=32, out_channels=48, kernel_size=k_sizes[1]),
-            nn.MaxPool2d(p_sizes[1]),
-            nn.BatchNorm2d(48),
-            nn.ReLU(),
-            nn.Dropout(drop_rate),
-            nn.Conv2d(in_channels=48, out_channels=64, kernel_size=k_sizes[2]),
-            nn.MaxPool2d(p_sizes[2]),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.Dropout(drop_rate),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=k_sizes[3]),
-            nn.MaxPool2d(p_sizes[3]),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.Dropout(drop_rate),
-            nn.Conv2d(in_channels=64, out_channels=96, kernel_size=k_sizes[4]),
-            nn.MaxPool2d(p_sizes[4]),
-            nn.BatchNorm2d(96),
-            nn.ReLU(),
-            nn.Dropout(drop_rate)
-        )
-
-        self.flatten = nn.Flatten()
-
-        self.fc = nn.Sequential(
-            nn.Linear(in_features=conv2fc_dim, out_features=512),
-            nn.ReLU(),
-            nn.Dropout(drop_rate),
-            nn.Linear(in_features=512, out_features=256),
-            nn.ReLU(),
-            nn.Dropout(drop_rate),
-            nn.Linear(in_features=256, out_features=num_classes)
-        )
-
-    def forward(self, x):
-        x = self.conv(x)
-        x = self.flatten(x)
-        x = self.fc(x)
-        
-        return x
-    
-    def predict(self, x):
-        return F.softmax(self.forward(x))
-
-class MineralCNNet(nn.Module):
-
-    def __init__(self, img_dim = 224, cdim = 3, k_sizes: tuple[int] = (11, 8, 4), p_sizes: tuple[int] = (4, 4, 2), drop_rate: float = 0.2, num_classes = 10):
-        super(MineralCNNet, self).__init__()
-
-        conv2fc_dim = img_dim
-
-        for k, p in zip(k_sizes, p_sizes):
-            conv2fc_dim -= k - 1
-            conv2fc_dim = math.ceil(conv2fc_dim / p)
-
-        conv2fc_dim = (conv2fc_dim ** 2) * 64
-
-        #conv2fc_dim = ((img_dim - sum(k_sizes) + len(k_sizes)) ** 2) * 96
-
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_channels=cdim, out_channels=32, kernel_size=k_sizes[0]),
-            nn.MaxPool2d(p_sizes[0]),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Dropout(drop_rate),
-            nn.Conv2d(in_channels=32, out_channels=48, kernel_size=k_sizes[1]),
-            nn.MaxPool2d(p_sizes[1]),
-            nn.BatchNorm2d(48),
-            nn.ReLU(),
-            nn.Dropout(drop_rate),
-            nn.Conv2d(in_channels=48, out_channels=64, kernel_size=k_sizes[2]),
-            nn.MaxPool2d(p_sizes[2]),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.Dropout(drop_rate)
-        )
-
-        self.flatten = nn.Flatten()
-
-        self.fc = nn.Sequential(
-            nn.Linear(in_features=1024, out_features=512),
-            nn.ReLU(),
-            nn.Dropout(drop_rate),
-            nn.Linear(in_features=512, out_features=256),
-            nn.ReLU(),
-            nn.Dropout(drop_rate),
-            nn.Linear(in_features=256, out_features=num_classes)
-        )
-
-    def forward(self, x):
-        x = self.conv(x)
-        x = self.flatten(x)
-        x = self.fc(x)
-        
-        return x
-    
     def predict(self, x):
         return F.softmax(self.forward(x))
 """

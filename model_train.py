@@ -92,13 +92,15 @@ class ImageDataSet(Dataset):
     def __getitem__(self, item):
         path = self.df["path"].iloc[item]
         oversample = self.df["oversamples"].iloc[item]
+        image_path = self.df["path"].iloc[item]
 
         label = ast.literal_eval(str(self.df["OHE"].iloc[item]).replace(' ', ','))
 
         image = Image.open(os.path.join(images_path, path)).convert("RGB")
 
         bboxes = ast.literal_eval(self.df["mineral_boxes"].iloc[item])
-        bbox = [box for box in bboxes if box["confidence"] == max([float(box["confidence"]) for box in bboxes])][0]
+        #bbox = [box for box in bboxes if box["confidence"] == max([float(box["confidence"]) for box in bboxes])][0]
+        bbox = self.get_correct_bbox(bboxes)
 
         crop = (bbox["box"][0] * image.size[0], bbox["box"][1] * image.size[1], bbox["box"][2] * image.size[0], bbox["box"][3] * image.size[1])
         image = image.crop(crop)
@@ -111,7 +113,15 @@ class ImageDataSet(Dataset):
         
         image = self.transforms(image)
 
-        return image, torch.from_numpy(np.array(label).astype(float))
+        return image, torch.from_numpy(np.array(label).astype(float)), image_path
+    
+    def get_correct_bbox(self, bboxes: dict):
+        output = [box for box in bboxes if box["confidence"] == max([float(box["confidence"]) for box in bboxes])][0]
+
+        if len(bboxes) == 1 and ((output["box"][0] > 0.5 and output["box"][2] > 0.5) or (output["box"][0] <= 0.5 and output["box"][2] <= 0.5)):
+            output = {"box": [0.15, 0.15, 0.85, 0.85]}
+        return output
+
 
 
 """ ------ Utility methods ------ """
@@ -135,6 +145,7 @@ def setup():
     np.random.seed(seed)
     torch.manual_seed(seed)
 
+
 def oversample_df(df: pd.DataFrame):
     classes = df["en_name"].value_counts()
     threshold = max(classes.values)
@@ -157,6 +168,24 @@ def oversample_df(df: pd.DataFrame):
     return df
 
 
+def debug_samples(dl: DataLoader):
+    image_tensor, _, paths = next(iter(dl))
+
+    for i, path in enumerate(paths):
+        print(f"{i+1}: {path}")
+    visualize_tensor(image_tensor)
+
+
+def visualize_tensor(t: torch.Tensor, plot_title: str = "", nrow: int = None):
+
+    grid = torchvision.utils.make_grid(t, nrow=int(np.ceil(t.shape[0] ** 0.5)) if nrow == None else nrow)
+
+    plt.imshow(grid.permute(1, 2, 0))
+    if plot_title != "":
+        plt.title(plot_title)
+    plt.show()
+
+
 def load_preprocess_data(save_pruned = True):
     print("[Info]: Data Preprocessing")
     raw_df = pd.read_csv(os.path.join(dataset_path, "minerals_full.csv"))
@@ -171,9 +200,6 @@ def load_preprocess_data(save_pruned = True):
 
     raw_df.drop(to_remove, errors="ignore", inplace=True)
 
-    if save_pruned:
-        raw_df.to_csv(os.path.join(dataset_path, "minerals_full_pruned.csv"), index=False)
-
     n_classes = raw_df["en_name"].value_counts()
 
     usable_classes = dict()
@@ -182,12 +208,16 @@ def load_preprocess_data(save_pruned = True):
             usable_classes[idx] = val
     
     pruned_df = raw_df[raw_df["en_name"].isin(usable_classes.keys())]
+    #pruned_df = pruned_df.groupby("en_name").sample(n=min(usable_classes.values()))
 
     # One Hot Encoding
     pruned_df.loc[:, "OHE"] = [x.astype(int) for x in [row.to_numpy() for _, row in pd.get_dummies(pruned_df["en_name"]).iterrows()]]
     pruned_df.reset_index(inplace=True)
 
     output = pruned_df[["OHE", "en_name", "path", "mineral_boxes"]]
+
+    if save_pruned:
+        output.to_csv(os.path.join(dataset_path, "minerals_full_pruned.csv"), index=False)
 
     n_classes = output["en_name"].nunique()
 
@@ -229,7 +259,7 @@ def train_model(model: nn.Module,
         run_loss = 0
         run_correct = 0
 
-        for images, labels in tqdm(train_dl):
+        for images, labels, _ in tqdm(train_dl):
             images = images.to(device)
             labels = labels.to(device)
 
@@ -254,7 +284,7 @@ def train_model(model: nn.Module,
         run_loss = 0
         run_correct = 0
 
-        for images, labels in tqdm(validate_dl):
+        for images, labels, _ in tqdm(validate_dl):
             images = images.to(device)
             labels = labels.to(device)
 
@@ -325,7 +355,7 @@ def test_model(model: nn.Module, m_name: str, test_dl: DataLoader):
             print("[Info]: Testing {}.\n".format(m_name))
 
             with torch.no_grad():
-                for images, labels in tqdm(test_dl):
+                for images, labels, _ in tqdm(test_dl):
                     images = images.to(device)                    
 
                     outputs = model(images)
@@ -371,9 +401,9 @@ def main():
     #model = CNNetWrapper(torchvision.models.resnet18(), base_num_classes=1000, num_classes=num_classes)
 
     model_name = "Mineral CNN"
-    model_weights_fn = "mineralcnn.pt"
+    model_weights_fn = "mineralcnn_8class.pt"
 
-    do_train = False
+    do_train = True
 
     if do_train:
         weights, _, _ = train_model(model=model, m_name=model_name, train_dl=train_dl, validate_dl=validation_dl)
