@@ -11,15 +11,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import copy
 import os
-import scipy.stats as stats
-import pickle
 import random
 import sklearn.model_selection as sk_ms
 import sklearn.metrics as skl_m
 import torch.nn as nn
-import torch.cuda
-import torch.utils
-import torch.utils.data
 import torchvision
 import traceback
 import warnings
@@ -43,7 +38,7 @@ argParser = argparse.ArgumentParser()
 
 argParser.add_argument("-m", "--model", type=str, default="mineral_cnn", help="Model Specifier")
 argParser.add_argument("-p", "--path", type=str, default="D:\\Users\\ibarn\\Documents\\Dataset Repository\\image\\mineralimage5k", help="Images path")
-argParser.add_argument("-e", "--epochs", type=int, default=40, help="Number of epochs")
+argParser.add_argument("-e", "--epochs", type=int, default=25, help="Number of epochs")
 argParser.add_argument("-b", "--batch_size", type=int, default=32, help="Batch Size")
 argParser.add_argument("-o", "--output", type=str, default=os.path.join(abs_path, "output"), help="Output directory")
 argParser.add_argument("-pm", "--pretrained_model", type=str, default="", help="Path to pretrained model")
@@ -86,6 +81,10 @@ class ImageDataSet(Dataset):
             transforms.RandomVerticalFlip(p=1.0)
         ])
 
+        self.brightness_oversample_transforms = transforms.Compose([
+            transforms.ColorJitter(brightness=0.5)
+        ])
+
     def __len__(self):
         return len(self.df)
 
@@ -106,10 +105,13 @@ class ImageDataSet(Dataset):
         image = image.crop(crop)
         #image.show()
 
-        if oversample == 1 or oversample == 3:
+        if oversample == 1 or oversample == 3 or oversample == 6 or oversample == 8:
             image = self.horiz_oversample_transforms(image)
-        elif oversample == 2:
+        if oversample == 2 or oversample == 3 or oversample == 7 or oversample == 8:
             image = self.vert_oversample_transforms(image)
+        if oversample == 5 or oversample == 6 or oversample == 7 or oversample == 8:
+            image = self.brightness_oversample_transforms(image)
+        
         
         image = self.transforms(image)
 
@@ -158,7 +160,7 @@ def oversample_df(df: pd.DataFrame):
             to_add -= len(df_copy)
             df_copy.loc[df_copy["en_name"] == idx, "oversamples"] += 1
 
-            if df_copy.loc[df_copy["en_name"] == idx, "oversamples"].max() >= 4:
+            if df_copy.loc[df_copy["en_name"] == idx, "oversamples"].max() >= 9:
                 break
 
             df = pd.concat((df, df_copy))
@@ -212,7 +214,7 @@ def load_preprocess_data(save_pruned = True, max_samples_per_class = -1, overrid
     if max_samples_per_class > 0:
         pruned_df = pruned_df.groupby("en_name").sample(n=max_samples_per_class)
     else:
-        pruned_df = raw_df[raw_df["en_name"].isin(usable_classes.keys())]
+        pruned_df = raw_df[raw_df["en_name"].isin(usable_classes.keys() if override_classes is None else override_classes)]
 
     # One Hot Encoding
     pruned_df.loc[:, "OHE"] = [x.astype(int) for x in [row.to_numpy() for _, row in pd.get_dummies(pruned_df["en_name"]).iterrows()]]
@@ -429,14 +431,13 @@ def main():
     'amethyst',
     'diopside',
     'copper',
-    'spinel',
-    'opal',
-    'sulfur'
+    'spinel'
     ]
+    # sulfur, opal
 
     mineral_classes.sort()
 
-    train_df, validation_df, test_df, n_classes = load_preprocess_data(save_pruned=True)
+    train_df, validation_df, test_df, n_classes = load_preprocess_data(override_classes=mineral_classes, save_pruned=True)
 
     num_classes = n_classes
     
@@ -455,7 +456,7 @@ def main():
     #model = CNNetWrapper(torchvision.models.resnet18(), base_num_classes=1000, num_classes=num_classes)
 
     model_name = "Mineral CNN"
-    model_weights_fn = "mineralcnn_dsc_4_20_2025"
+    model_weights_fn = "mineralcnn_dsc_4_21_2025"
 
     do_train = True
     do_prune = False
