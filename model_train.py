@@ -43,8 +43,8 @@ argParser = argparse.ArgumentParser()
 
 argParser.add_argument("-m", "--model", type=str, default="mineral_cnn", help="Model Specifier")
 argParser.add_argument("-p", "--path", type=str, default="D:\\Users\\ibarn\\Documents\\Dataset Repository\\image\\mineralimage5k", help="Images path")
-argParser.add_argument("-e", "--epochs", type=int, default=25, help="Number of epochs")
-argParser.add_argument("-b", "--batch_size", type=int, default=64, help="Batch Size")
+argParser.add_argument("-e", "--epochs", type=int, default=40, help="Number of epochs")
+argParser.add_argument("-b", "--batch_size", type=int, default=32, help="Batch Size")
 argParser.add_argument("-o", "--output", type=str, default=os.path.join(abs_path, "output"), help="Output directory")
 argParser.add_argument("-pm", "--pretrained_model", type=str, default="", help="Path to pretrained model")
 args = argParser.parse_args()
@@ -186,7 +186,7 @@ def visualize_tensor(t: torch.Tensor, plot_title: str = "", nrow: int = None):
     plt.show()
 
 
-def load_preprocess_data(save_pruned = True):
+def load_preprocess_data(save_pruned = True, max_samples_per_class = -1, override_classes = None):
     print("[Info]: Data Preprocessing")
     raw_df = pd.read_csv(os.path.join(dataset_path, "minerals_full.csv"))
 
@@ -204,11 +204,15 @@ def load_preprocess_data(save_pruned = True):
 
     usable_classes = dict()
     for idx, val in n_classes.items():
-        if val > 600: # Can change if needed
+        if val > 400: # Can change if needed # 600: 5 classes
             usable_classes[idx] = val
     
-    pruned_df = raw_df[raw_df["en_name"].isin(usable_classes.keys())]
-    #pruned_df = pruned_df.groupby("en_name").sample(n=min(usable_classes.values()))
+    pruned_df = raw_df[raw_df["en_name"].isin(usable_classes.keys() if override_classes is None else override_classes)]
+
+    if max_samples_per_class > 0:
+        pruned_df = pruned_df.groupby("en_name").sample(n=max_samples_per_class)
+    else:
+        pruned_df = raw_df[raw_df["en_name"].isin(usable_classes.keys())]
 
     # One Hot Encoding
     pruned_df.loc[:, "OHE"] = [x.astype(int) for x in [row.to_numpy() for _, row in pd.get_dummies(pruned_df["en_name"]).iterrows()]]
@@ -379,40 +383,115 @@ def test_model(model: nn.Module, m_name: str, test_dl: DataLoader):
             traceback.print_exc()
 
 
+def prune_model(model: MineralCNNet, model_name: str, sparsity: float = 0.4):
+    """
+    Magnitude-based, fine-grained pruning
+    """
+    print(f"[Info]: Pruning: {model_name}")
+    with torch.no_grad():
+        masks = dict()
+        for name, param in model.named_parameters():
+            if param.dim() > 1: # conv and fc layers
+                sparsity = min(max(0.0, sparsity), 1.0)
+
+                if sparsity == 1.0:
+                    param.zero_()
+                    return torch.zeros_like(param)
+                elif sparsity == 0.0:
+                    return torch.ones_like(param)
+
+                num_elements = param.numel()
+                importance = torch.abs(param)
+                threshold = torch.kthvalue(importance.flatten(), int(round(num_elements * sparsity)))
+                mask = importance > threshold[0]
+                param.mul_(mask)
+
+                masks[name] = mask
+
+        for name, param in model.named_parameters():
+            if name in masks:
+                param *= masks[name]
+    
+    return model
+
+
 def main():
     setup()
 
-    train_df, validation_df, test_df, n_classes = load_preprocess_data()
+    # Overridden classes
+    mineral_classes = [
+    'quartz',
+    'topaz',
+    'agate',
+    'beryl',
+    'silver',
+    'gold',
+    'amethyst',
+    'diopside',
+    'copper',
+    'spinel',
+    'opal',
+    'sulfur'
+    ]
+
+    mineral_classes.sort()
+
+    train_df, validation_df, test_df, n_classes = load_preprocess_data(save_pruned=True)
 
     num_classes = n_classes
     
     # Create datasets
 
     train_ds = ImageDataSet(train_df)
-    train_dl = DataLoader(train_ds, shuffle=True, batch_size=64)
+    train_dl = DataLoader(train_ds, shuffle=True, batch_size=batch_size)
 
     validation_ds = ImageDataSet(validation_df)
-    validation_dl = DataLoader(validation_ds, shuffle=True, batch_size=64)
+    validation_dl = DataLoader(validation_ds, shuffle=True, batch_size=batch_size)
 
     test_ds = ImageDataSet(test_df)
-    test_dl = DataLoader(test_ds, shuffle=True, batch_size=64)
+    test_dl = DataLoader(test_ds, shuffle=True, batch_size=batch_size)
 
     model = MineralCNNet(num_classes=num_classes)
     #model = CNNetWrapper(torchvision.models.resnet18(), base_num_classes=1000, num_classes=num_classes)
 
     model_name = "Mineral CNN"
-    model_weights_fn = "mineralcnn_8class.pt"
+    model_weights_fn = "mineralcnn_dsc_4_20_2025"
 
     do_train = True
+    do_prune = False
+    prune_loaded = False
 
     if do_train:
         weights, _, _ = train_model(model=model, m_name=model_name, train_dl=train_dl, validate_dl=validation_dl)
-        torch.save(weights, os.path.join(abs_path, model_weights_fn))
+        torch.save(weights, os.path.join(abs_path, f"{model_weights_fn}.pt")) # backup
         model.load_state_dict(weights)
+
+        if do_prune:
+
+            # Prune model
+            model = prune_model(model, model_name=model_name)
+
+            # Fine-tune pruned model
+            print(f"[Info]: Fine-tuning {model_name}")
+            weights, _, _ = train_model(model=model, m_name=model_name, train_dl=train_dl, validate_dl=validation_dl, lr=1e-4)
+            torch.save(weights, os.path.join(abs_path, f"{model_weights_fn}_pruned.pt"))
+            model.load_state_dict(weights)
+
     else:
-        weights = torch.load(os.path.join(abs_path, model_weights_fn), map_location=device, weights_only=True)
+        weights = torch.load(os.path.join(abs_path, f"{model_weights_fn}.pt" if prune_loaded else f"{model_weights_fn}_pruned.pt"), map_location=device, weights_only=True)
         model = model.to(device)
         model.load_state_dict(weights)
+
+        if prune_loaded and do_prune:
+            # Prune model
+            model = prune_model(model, model_name=model_name)
+
+            # Fine-tune pruned model
+            print(f"[Info]: Fine-tuning {model_name}")
+            weights, _, _ = train_model(model=model, m_name=model_name, train_dl=train_dl, validate_dl=validation_dl, lr=1e-4)
+            torch.save(weights, os.path.join(abs_path, f"{model_weights_fn}_pruned.pt"))
+            model.load_state_dict(weights)
+
 
     test_model(model=model, m_name="Mineral CNN", test_dl=test_dl)
 
