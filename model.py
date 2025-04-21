@@ -5,24 +5,11 @@ Author: Ivan Klevanski
 
 """
 
-import numpy as np
-import math
-import matplotlib.pyplot as plt
-import copy
 import os
-import scipy.stats as stats
-import pickle
-import sklearn.decomposition as skl_d
 import torch.nn as nn
 import torch.cuda
-import torch.utils
-import torch.utils.data
-import torchvision
 import torch.nn.functional as F
 
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
 from typing import Union
 
 abs_path = os.path.dirname(os.path.abspath(__file__))
@@ -66,13 +53,13 @@ class DSConv2d(nn.Module):
     
 
 class MineralCNNet(nn.Module):
-    def __init__(self, img_dim = 224, cdim = 3, k_sizes: tuple[int] = (4, 4), p_sizes: tuple[int] = (8, 8), drop_rate: float = 0.1, num_classes = 10): # tuple[int] = (4, 4, 4), p_sizes: tuple[int] = (4, 4, 4)
+    def __init__(self, img_dim = 224, cdim = 3, k_sizes: tuple[int] = (4, 2), p_sizes: tuple[int] = (8, 8), drop_rate: float = 0.1, num_classes = 10): # tuple[int] = (4, 4, 4), p_sizes: tuple[int] = (4, 4, 4)
             super(MineralCNNet, self).__init__()
 
             conv2fc_dim = img_dim
 
             for k, p in zip(k_sizes, p_sizes):
-                conv2fc_dim -= k - 1
+                conv2fc_dim -= (k - 1) * 2 # Double convolutions
                 conv2fc_dim = int(conv2fc_dim / p)
 
             conv2fc_dim = (conv2fc_dim ** 2) * 64
@@ -81,11 +68,17 @@ class MineralCNNet(nn.Module):
 
             self.conv = nn.Sequential(
                 DSConv2d(in_channels=cdim, out_channels=32, kernel_size=k_sizes[0]),
+                nn.BatchNorm2d(32),
+                nn.ReLU(),
+                DSConv2d(in_channels=32, out_channels=32, kernel_size=k_sizes[0]),
                 nn.MaxPool2d(p_sizes[0]),
                 nn.BatchNorm2d(32),
                 nn.ReLU(),
                 nn.Dropout2d(drop_rate),
                 DSConv2d(in_channels=32, out_channels=64, kernel_size=k_sizes[1]),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+                DSConv2d(in_channels=64, out_channels=64, kernel_size=k_sizes[1]),
                 nn.MaxPool2d(p_sizes[1]),
                 nn.BatchNorm2d(64),
                 nn.ReLU(),
