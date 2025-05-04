@@ -512,7 +512,7 @@ def main():
     if do_viz:
         model.eval()
         model_graph = draw_graph(model, input_size=(1,3,224,224), expand_nested=True)
-        model_graph.visual_graph.render(os.path.join(media_dir, f"{model_weights_fn}_viz"), format="svg")
+        model_graph.visual_graph.render(os.path.join(media_dir, f"{model_weights_fn}_viz"), format="png")
 
     pass
 
