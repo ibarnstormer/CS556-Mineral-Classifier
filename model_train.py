@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import copy
 import os
 import random
+import graphviz
 import sklearn.model_selection as sk_ms
 import sklearn.metrics as skl_m
 import torch.nn as nn
@@ -24,6 +25,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torchvision import transforms
+from torchview import draw_graph
 from tqdm.auto import tqdm
 
 warnings.simplefilter("ignore", category=(pd.errors.SettingWithCopyWarning))
@@ -33,6 +35,10 @@ abs_path = os.path.dirname(os.path.abspath(__file__))
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 seed = 42
 
+# Additional setup (model visualization) (change to Graphviz executables path)
+os.environ["PATH"] += os.pathsep + "D:\\Program Files (x86)\\Graphviz-12.2.1-win64\\bin"
+graphviz.set_jupyter_format('png')
+
 # Argparser Arguments
 argParser = argparse.ArgumentParser()
 
@@ -41,6 +47,8 @@ argParser.add_argument("-p", "--path", type=str, default="D:\\Users\\ibarn\\Docu
 argParser.add_argument("-e", "--epochs", type=int, default=20, help="Number of epochs")
 argParser.add_argument("-b", "--batch_size", type=int, default=16, help="Batch Size")
 argParser.add_argument("-o", "--output", type=str, default=os.path.join(abs_path, "output"), help="Output directory")
+argParser.add_argument("-md", "--media", type=str, default=os.path.join(abs_path, "media"), help="Media Output directory")
+
 argParser.add_argument("-pm", "--pretrained_model", type=str, default="", help="Path to pretrained model")
 args = argParser.parse_args()
 
@@ -50,6 +58,8 @@ epochs = args.epochs
 batch_size = args.batch_size
 use_pretrained = args.pretrained_model != ""
 pretrained_path = args.pretrained_model
+output_dir = args.output
+media_dir = args.media
 
 images_path = os.path.join(dataset_path, "mineral_images")
 
@@ -458,13 +468,15 @@ def main():
     model_name = "Mineral CNN"
     model_weights_fn = "mineralcnn_dsc_4_21_2025"
 
-    do_train = True
+    do_train = False
     do_prune = False
+    do_test = False
+    do_viz = True
     prune_loaded = False
 
     if do_train:
         weights, _, _ = train_model(model=model, m_name=model_name, train_dl=train_dl, validate_dl=validation_dl)
-        torch.save(weights, os.path.join(abs_path, f"{model_weights_fn}.pt")) # backup
+        torch.save(weights, os.path.join(output_dir, f"{model_weights_fn}.pt")) # backup
         model.load_state_dict(weights)
 
         if do_prune:
@@ -475,11 +487,11 @@ def main():
             # Fine-tune pruned model
             print(f"[Info]: Fine-tuning {model_name}")
             weights, _, _ = train_model(model=model, m_name=model_name, train_dl=train_dl, validate_dl=validation_dl, lr=1e-4)
-            torch.save(weights, os.path.join(abs_path, f"{model_weights_fn}_pruned.pt"))
+            torch.save(weights, os.path.join(output_dir, f"{model_weights_fn}_pruned.pt"))
             model.load_state_dict(weights)
 
     else:
-        weights = torch.load(os.path.join(abs_path, f"{model_weights_fn}.pt" if prune_loaded else f"{model_weights_fn}_pruned.pt"), map_location=device, weights_only=True)
+        weights = torch.load(os.path.join(output_dir, f"{model_weights_fn}.pt" if not prune_loaded else f"{model_weights_fn}_pruned.pt"), map_location=device, weights_only=True)
         model = model.to(device)
         model.load_state_dict(weights)
 
@@ -490,11 +502,17 @@ def main():
             # Fine-tune pruned model
             print(f"[Info]: Fine-tuning {model_name}")
             weights, _, _ = train_model(model=model, m_name=model_name, train_dl=train_dl, validate_dl=validation_dl, lr=1e-4)
-            torch.save(weights, os.path.join(abs_path, f"{model_weights_fn}_pruned.pt"))
+            torch.save(weights, os.path.join(output_dir, f"{model_weights_fn}_pruned.pt"))
             model.load_state_dict(weights)
 
+    if do_test:
+        test_model(model=model, m_name="Mineral CNN", test_dl=test_dl)
 
-    test_model(model=model, m_name="Mineral CNN", test_dl=test_dl)
+    # Model Visualization
+    if do_viz:
+        model.eval()
+        model_graph = draw_graph(model, input_size=(1,3,224,224), expand_nested=True)
+        model_graph.visual_graph.render(os.path.join(media_dir, f"{model_weights_fn}_viz"), format="svg")
 
     pass
 
