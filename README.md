@@ -10,9 +10,9 @@ https://github.com/ibarnstormer/CS556-Mineral-Classifier-Mobile-App
 6. Run the model_train.py script or edit the SLURM job (if using HPC cluster) script to run the model_train.py script to begin training the model. The model will save the weights to the output folder specified in the output directory argument (-o).
 7. Copy the saved weights file and place into the app -> src -> main-> res -> raw directory and change the file extension from .pt to .pte (if needed).
 
-### Additional script parameters for model_train.py:
+## Additional script parameters for model_train.py:
 
-# Argparse arguments:
+### Argparse arguments:
 **-m:** Model specifier / name of file to which model weights would be saved to
 **-p:** Dataset path for MineralImage5K
 **-e:** Number of epochs
