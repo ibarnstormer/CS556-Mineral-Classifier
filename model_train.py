@@ -52,7 +52,7 @@ argParser.add_argument("-md", "--media", type=str, default=os.path.join(abs_path
 argParser.add_argument("-pm", "--pretrained_model", type=str, default="", help="Path to pretrained model")
 args = argParser.parse_args()
 
-model_name = args.model
+model_weights_fn = args.model
 dataset_path = args.path
 epochs = args.epochs
 batch_size = args.batch_size
@@ -473,7 +473,6 @@ def main():
     #model = CNNetWrapper(torchvision.models.resnet18(), base_num_classes=1000, num_classes=num_classes)
 
     model_name = "Mineral CNN"
-    model_weights_fn = "mineralcnn_dsc_4_21_2025"
 
     if do_train:
         weights, _, _ = train_model(model=model, m_name=model_name, train_dl=train_dl, validate_dl=validation_dl)
