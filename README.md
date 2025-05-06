@@ -10,7 +10,7 @@ https://github.com/ibarnstormer/CS556-Mineral-Classifier-Mobile-App
 6. Run the model_train.py script or edit the SLURM job (if using HPC cluster) script to run the model_train.py script to begin training the model. The model will save the weights to the output folder specified in the output directory argument (-o).
 7. Copy the saved weights file and place into the app -> src -> main-> res -> raw directory and change the file extension from .pt to .pte (if needed).
 
-## Additional script parameters for model_train.py:
+### Additional script parameters for model_train.py:
 
 # Argparse arguments:
 **-m:** Model specifier / name of file to which model weights would be saved to
@@ -21,7 +21,7 @@ https://github.com/ibarnstormer/CS556-Mineral-Classifier-Mobile-App
 **-md:** media directory to which to save the model visualizations to
 **-pm:** Flag for using pretrained model weights
 
-# Additional internal arguments (found after Argparse arguments):
+### Additional internal arguments (found after Argparse arguments):
 
 **do_train:** Flag for performing model training
 **do_prune:** Flag for performing magnitude-based fine-grained pruning
@@ -29,7 +29,7 @@ https://github.com/ibarnstormer/CS556-Mineral-Classifier-Mobile-App
 **do_viz:** Flag for performing visualization of the model weights
 **prune_loaded:** Flag for skipping training/testing and go to pruning / fine-tuning model
 
-# Performance metrics for 10 mineral classes:
+## Performance metrics for 10 mineral classes:
 
 | Mineral Class | Precision | Recall | F1-Score |
 | ----------- | ----------- |----------- | ----------- |
@@ -44,6 +44,6 @@ https://github.com/ibarnstormer/CS556-Mineral-Classifier-Mobile-App
 | Spinel | 0.86 | 0.65 | 0.74 |
 | Topaz | 0.82 | 0.80 | 0.81 |
 
-# Mineral CNN architecture
+## Mineral CNN architecture
 ![Mineral CNN architecture](https://github.com/ibarnstormer/CS556-Mineral-Classifier/blob/main/media/mineralcnn_dsc_4_21_2025_viz.png)
 
