@@ -29,8 +29,6 @@ https://github.com/ibarnstormer/CS556-Mineral-Classifier-Mobile-App
 **do_viz:** Flag for performing visualization of the model weights
 **prune_loaded:** Flag for skipping training/testing and go to pruning / fine-tuning model
 
-## Cached Results and Model Visualizations
-
 # Performance metrics for 10 mineral classes:
 
 | Mineral Class | Precision | Recall | F1-Score |
