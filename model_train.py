@@ -63,6 +63,13 @@ media_dir = args.media
 
 images_path = os.path.join(dataset_path, "mineral_images")
 
+# Additional arguments
+do_train = True
+do_prune = False
+do_test = True
+do_viz = True
+prune_loaded = False
+
 # Dynamic Arguments
 num_classes = 10 # Will change depending on number of usable images from dataset
 
@@ -467,12 +474,6 @@ def main():
 
     model_name = "Mineral CNN"
     model_weights_fn = "mineralcnn_dsc_4_21_2025"
-
-    do_train = False
-    do_prune = False
-    do_test = False
-    do_viz = True
-    prune_loaded = False
 
     if do_train:
         weights, _, _ = train_model(model=model, m_name=model_name, train_dl=train_dl, validate_dl=validation_dl)
